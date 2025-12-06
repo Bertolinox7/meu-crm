@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Meu CRM Profissional</title>
+<style>
+    body { font-family: Arial, sans-serif; margin: 0; padding: 0; background: #f5f5f5; }
+    #loginContainer, #crmContainer { max-width: 800px; margin: 50px auto; padding: 20px; background: #fff; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+    input, button { padding: 10px; margin: 5px 0; width: 100%; box-sizing: border-box; font-size: 16px; }
+    button { cursor: pointer; background: #4CAF50; color: #fff; border: none; border-radius: 4px; }
+    .hidden { display: none; }
+    h2, h3 { margin-top: 0; }
+    table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+    th, td { padding: 8px; border: 1px solid #ccc; text-align: left; }
+    .chart-bar { display: inline-block; margin: 0 5px; text-align: center; vertical-align: bottom; background-color: #4CAF50; color: #fff; width: 40px; }
+</style>
+</head>
+<body>
+
+<div id="loginContainer">
+    <h2>Login CRM</h2>
+    <input type="email" id="email" placeholder="Email"><br>
+    <input type="password" id="password" placeholder="Senha"><br>
+    <button id="loginBtn">Entrar</button>
+    <p id="loginError" style="color:red;"></p>
+</div>
+
+<div id="crmContainer" class="hidden">
+    <h2>Bem-vindo ao CRM</h2>
+    <button id="logoutBtn">Sair</button>
+
+    <div id="dashboard">
+        <h3>Dashboard</h3>
+        <p>Total de Leads: <span id="totalLeads">0</span></p>
+        <p>Leads Fechados: <span id="closedDeals">0</span></p>
+        <p>Leads Pendentes: <span id="pendingLeads">0</span></p>
+        <div id="sellerChart"></div>
+    </div>
+
+    <div id="leadsContainer">
+        <h3>Leads</h3>
+        <table id="leadsTable">
+            <thead>
+                <tr>
+                    <th>Nome</th>
+                    <th>Telefone</th>
+                    <th>Status</th>
+                    <th>Responsável</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+const API_BASE = "/api";
+
+// ---- LOGIN ----
+document.getElementById("loginBtn").onclick = async () => {
+    const email = document.getElementById("email").value;
+    const senha = document.getElementById("password").value;
+
+    const res = await fetch(`${API_BASE}/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, senha })
+    });
+
+    const json = await res.json();
+
+    if (json.error) {
+        document.getElementById("loginError").textContent = json.error;
+        return;
+    }
+
+    localStorage.setItem("token", json.token);
+    localStorage.setItem("userId", json.user.id);
+    localStorage.setItem("userTipo", json.user.tipo);
+    localStorage.setItem("userNome", json.user.nome);
+
+    document.getElementById("loginContainer").classList.add("hidden");
+    document.getElementById("crmContainer").classList.remove("hidden");
+
+    loadLeads();
+};
+
+// ---- LOGOUT ----
+document.getElementById("logoutBtn").onclick = () => {
+    localStorage.clear();
+    location.reload();
+};
+
+// ---- CARREGAR LEADS ----
+async function loadLeads() {
+    const tipo = localStorage.getItem("userTipo");
+    const userId = localStorage.getItem("userId");
+
+    let url = `${API_BASE}/leads`;
+    if (tipo === "vendedor") url += `?vendedor_id=${userId}`;
+
+    const res = await fetch(url);
+    const data = await res.json();
+
+    const leads = data.leads;
+    const tbody = document.querySelector("#leadsTable tbody");
+    tbody.innerHTML = "";
+
+    leads.forEach(l => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+            <td>${l.nome_cliente}</td>
+            <td>${l.telefone}</td>
+            <td>${l.status}</td>
+            <td>${l.vendedor_id}</td>
+        `;
+        tbody.appendChild(tr);
+    });
+
+    document.getElementById("totalLeads").textContent = leads.length;
+    document.getElementById("closedDeals").textContent = leads.filter(l => l.status === "fechado").length;
+    document.getElementById("pendingLeads").textContent = leads.filter(l => l.status !== "fechado").length;
+
+    const sellers = {};
+    leads.forEach(l => {
+        sellers[l.vendedor_id] = (sellers[l.vendedor_id] || 0) + 1;
+    });
+
+    const chart = document.getElementById("sellerChart");
+    chart.innerHTML = "";
+    Object.keys(sellers).forEach(s => {
+        const count = sellers[s];
+        const bar = document.createElement("div");
+        bar.className = "chart-bar";
+        bar.style.height = `${count * 20}px`;
+        bar.textContent = `${s}: ${count}`;
+        chart.appendChild(bar);
+    });
+}
+</script>
+
+</body>
+</html>
+
+
